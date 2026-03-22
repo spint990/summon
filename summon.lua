@@ -9,6 +9,13 @@ local fireproximityprompt = fireproximityprompt
 -- Script URL for persistence (CHANGE THIS TO YOUR GITHUB RAW URL)
 local ScriptURL = "https://raw.githubusercontent.com/spint990/summon/refs/heads/main/summon.lua"
 
+-- Anti-duplicate execution check using global environment
+local ScriptId = "SummonHub_" .. tostring(game.PlaceId)
+if getgenv()[ScriptId] then
+    return -- Script already running, exit
+end
+getgenv()[ScriptId] = true
+
 -- Persistence variables
 local TeleportCheck = false
 local KeepScript = true
