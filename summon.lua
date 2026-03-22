@@ -1,4 +1,6 @@
 -- Summon Script with Rayfield UI
+-- Wait for game to load
+if not game:IsLoaded() then game.Loaded:Wait() end
 
 -- Executor function fallbacks
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
