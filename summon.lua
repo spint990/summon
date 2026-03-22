@@ -7,7 +7,7 @@ local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (f
 local fireproximityprompt = fireproximityprompt
 
 -- Script URL for persistence (CHANGE THIS TO YOUR GITHUB RAW URL)
-local ScriptURL = loadstring(game:HttpGet("https://raw.github.com/spint990/summon/blob/main/summon.lua"))()
+local ScriptURL = loadstring(game:HttpGet("https://raw.githubusercontent.com/spint990/summon/blob/main/summon.lua"))()
 
 -- Persistence variables
 local TeleportCheck = false
