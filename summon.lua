@@ -13,72 +13,7 @@ local ScriptURL = "https://raw.githubusercontent.com/spint990/summon/refs/heads/
 local TeleportCheck = false
 local KeepScript = true
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
--- Load WaveData for maps/stages
-local WaveData = nil
-local success, err = pcall(function()
-    WaveData = require(ReplicatedStorage.Systems.Waves.WaveData)
-end)
-if not success then
-    warn("Failed to load WaveData: " .. tostring(err))
-end
-
--- Get available maps dynamically
-local function GetAvailableMaps()
-    local maps = {}
-    if not WaveData then return maps end
-    
-    for mapName, mapData in pairs(WaveData) do
-        if type(mapData) == "table" and mapData.Stages and not mapData.Hidden then
-            local stageCount = 0
-            for _ in pairs(mapData.Stages) do
-                stageCount = stageCount + 1
-            end
-            table.insert(maps, {
-                Name = mapName,
-                Title = mapData.Title or mapName,
-                Order = mapData.Order or 999,
-                StageCount = stageCount,
-                IsRaid = mapData.IsRaid or false,
-                ChallengeWave = mapData.ChallengeWave or false
-            })
-        end
-    end
-    
-    -- Sort by order
-    table.sort(maps, function(a, b)
-        return a.Order < b.Order
-    end)
-    
-    return maps
-end
-
--- Get stages for a specific map
-local function GetStagesForMap(mapName)
-    local stages = {}
-    if not WaveData or not WaveData[mapName] then return stages end
-    
-    local mapData = WaveData[mapName]
-    if not mapData.Stages then return stages end
-    
-    for stageNum, stageData in pairs(mapData.Stages) do
-        if type(stageData) == "table" then
-            table.insert(stages, {
-                Number = stageNum,
-                Name = stageData.Name or ("Stage " .. tostring(stageNum)),
-                Level = stageData.Level or 1
-            })
-        end
-    end
-    
-    -- Sort by stage number
-    table.sort(stages, function(a, b)
-        return a.Number < b.Number
-    end)
-    
-    return stages
-end
+local CollectionService = game:GetService("CollectionService")
 
 -- Load Rayfield UI
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/spint990/ParadiseEnhancer/refs/heads/main/Rayfield.lua"))()
@@ -93,154 +28,15 @@ local Window = Rayfield:CreateWindow({
 
 -- Dungeon Tab
 local DungeonTab = Window:CreateTab("Dungeon", "box")
-DungeonTab:CreateSection("Dungeon Launcher")
-
--- Variables for dungeon selection
-local SelectedMap = nil
-local SelectedStage = 1
-local AvailableMaps = GetAvailableMaps()
-
--- Create map dropdown options
-local MapOptions = {}
-for _, mapInfo in ipairs(AvailableMaps) do
-    table.insert(MapOptions, mapInfo.Title .. " (" .. mapInfo.StageCount .. " stages)")
-end
-
--- Map Selection Dropdown
-DungeonTab:CreateDropdown({
-    Name = "Select Map",
-    Options = MapOptions,
-    CurrentOption = MapOptions[1] or "No maps found",
-    Flag = "MapSelector",
-    Callback = function(Value)
-        local mapTitle = Value:match("^(.+) %(.+%)$")
-        for _, mapInfo in ipairs(AvailableMaps) do
-            if mapInfo.Title == mapTitle then
-                SelectedMap = mapInfo.Name
-                -- Update stage dropdown
-                local stages = GetStagesForMap(SelectedMap)
-                if stages[1] then
-                    SelectedStage = stages[1].Number
-                end
-                Rayfield:Notify({
-                    Title = "Map Selected",
-                    Content = mapInfo.Title .. " - " .. mapInfo.StageCount .. " stages available",
-                    Duration = 2
-                })
-                break
-            end
-        end
-    end
-})
-
--- Stage Selection Slider
-DungeonTab:CreateSlider({
-    Name = "Select Stage",
-    Range = {1, 10},
-    Increment = 1,
-    Suffix = "Stage",
-    CurrentValue = 1,
-    Flag = "StageSelector",
-    Callback = function(Value)
-        SelectedStage = math.floor(Value)
-    end
-})
-
--- Launch Dungeon Button
-DungeonTab:CreateButton({
-    Name = "Launch Dungeon",
-    Callback = function()
-        if not SelectedMap then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "Please select a map first!",
-                Duration = 3
-            })
-            return
-        end
-        
-        -- Find an available queue
-        local queueFound = false
-        for _, queue in pairs(game.CollectionService:GetTagged("LobbyQueue")) do
-            -- Set the queue attributes
-            queue:SetAttribute("Map", SelectedMap)
-            queue:SetAttribute("Stage", SelectedStage)
-            queueFound = true
-            
-            Rayfield:Notify({
-                Title = "Launching",
-                Content = "Starting " .. SelectedMap .. " Stage " .. SelectedStage,
-                Duration = 3
-            })
-            
-            -- Try to launch via remote
-            local QueueRemote = ReplicatedStorage:FindFirstChild("Queue")
-            if QueueRemote then
-                local SetQueue = QueueRemote:FindFirstChild("SetQueue")
-                local LaunchQueue = QueueRemote:FindFirstChild("LaunchQueue")
-                
-                if SetQueue then
-                    SetQueue:FireServer(queue, SelectedMap, SelectedStage)
-                end
-                
-                task.wait(0.5)
-                
-                if LaunchQueue then
-                    LaunchQueue:FireServer(queue)
-                end
-            end
-            break
-        end
-        
-        if not queueFound then
-            Rayfield:Notify({
-                Title = "Error",
-                Content = "No queue found! Go to a queue door first.",
-                Duration = 4
-            })
-        end
-    end
-})
-
--- Refresh Maps Button
-DungeonTab:CreateButton({
-    Name = "Refresh Maps List",
-    Callback = function()
-        AvailableMaps = GetAvailableMaps()
-        Rayfield:Notify({
-            Title = "Maps Refreshed",
-            Content = "Found " .. #AvailableMaps .. " maps",
-            Duration = 2
-        })
-    end
-})
-
--- Show available maps info
-DungeonTab:CreateButton({
-    Name = "Show Maps Info",
-    Callback = function()
-        local info = "Available Maps:\n"
-        for _, mapInfo in ipairs(AvailableMaps) do
-            info = info .. mapInfo.Title .. " (" .. mapInfo.StageCount .. " stages)\n"
-        end
-        Rayfield:Notify({
-            Title = "Maps Info",
-            Content = info,
-            Duration = 5
-        })
-    end
-})
-
 DungeonTab:CreateSection("Chest Auto-Farm")
 
 -- Variables
-local ChestFarmToggle = false
+local ChestFarmToggle = true
 local OpenedChests = {}
 
 -- Get unopened chests
 local function GetUnopenedChests()
     local chests = {}
-    local CollectionService = game:GetService("CollectionService")
     
     for _, chest in pairs(CollectionService:GetTagged("BonusChestPart")) do
         if chest and chest.Parent then
@@ -265,7 +61,7 @@ end
 
 -- Teleport function
 local function TeleportTo(position)
-    local hrp = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local hrp = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if hrp then
         hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 0))
     end
@@ -275,7 +71,7 @@ end
 DungeonTab:CreateToggle({
     Name = "Auto Farm Chests",
     Description = "Teleports to and opens all chests",
-    CurrentValue = false,
+    CurrentValue = true,
     Flag = "AutoFarmChests",
     Callback = function(Value)
         ChestFarmToggle = Value
@@ -314,23 +110,6 @@ DungeonTab:CreateToggle({
                 end
             end)
         end
-    end
-})
-
--- Scan Button
-DungeonTab:CreateButton({
-    Name = "Scan for Chests",
-    Callback = function()
-        Rayfield:Notify({Title = "Scanner", Content = "Found " .. #GetUnopenedChests() .. " chests", Duration = 3})
-    end
-})
-
--- Reset Button
-DungeonTab:CreateButton({
-    Name = "Reset Counter",
-    Callback = function()
-        OpenedChests = {}
-        Rayfield:Notify({Title = "Reset", Content = "Counter reset!", Duration = 2})
     end
 })
 
