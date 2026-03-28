@@ -78,6 +78,7 @@ end
 -- Auto Farm Loop
 local function StartChestFarm()
     if FarmRunning then return end
+    task.wait(15)
     FarmRunning = true
     OpenedChests = {}
     task.spawn(function()
@@ -101,7 +102,6 @@ local function StartChestFarm()
                         fireproximityprompt(prompt)
                         table.insert(OpenedChests, chest)
                     end
-                    task.wait(15)
                 end
             end
             
