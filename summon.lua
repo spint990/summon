@@ -102,6 +102,7 @@ local function StartChestFarm()
                         fireproximityprompt(prompt)
                         table.insert(OpenedChests, chest)
                     end
+task.wait(15)
                 end
             end
             
