@@ -40,6 +40,7 @@ DungeonTab:CreateSection("Chest Auto-Farm")
 -- Variables
 local ChestFarmToggle = true
 local OpenedChests = {}
+local FarmRunning = false
 
 -- Get unopened chests
 local function GetUnopenedChests()
@@ -74,6 +75,46 @@ local function TeleportTo(position)
     end
 end
 
+-- Auto Farm Loop
+local function StartChestFarm()
+    if FarmRunning then return end
+    FarmRunning = true
+    OpenedChests = {}
+    task.spawn(function()
+        while ChestFarmToggle do
+            local chests = GetUnopenedChests()
+            for _, chest in ipairs(chests) do
+                if not ChestFarmToggle then break end
+                
+                local pos = chest:IsA("BasePart") and chest.Position or chest:FindFirstChild("PrimaryPart") and chest.PrimaryPart.Position
+                if not pos then
+                    for _, part in pairs(chest:GetDescendants()) do
+                        if part:IsA("BasePart") then pos = part.Position break end
+                    end
+                end
+                
+                if pos then
+                    TeleportTo(pos)
+                    task.wait(0.5)
+                    local prompt = chest:FindFirstChild("ProximityPrompt", true)
+                    if prompt and prompt.Enabled then
+                        fireproximityprompt(prompt)
+                        table.insert(OpenedChests, chest)
+                    end
+                    task.wait(15)
+                end
+            end
+            
+            if #OpenedChests >= 5 then
+                task.wait(10)
+                OpenedChests = {}
+            end
+            task.wait(2)
+        end
+        FarmRunning = false
+    end)
+end
+
 -- Auto Farm Toggle
 DungeonTab:CreateToggle({
     Name = "Auto Farm Chests",
@@ -83,42 +124,12 @@ DungeonTab:CreateToggle({
     Callback = function(Value)
         ChestFarmToggle = Value
         if Value then
-            OpenedChests = {}
-            task.spawn(function()
-                while ChestFarmToggle do
-                    local chests = GetUnopenedChests()
-                    for _, chest in ipairs(chests) do
-                        if not ChestFarmToggle then break end
-                        
-                        local pos = chest:IsA("BasePart") and chest.Position or chest:FindFirstChild("PrimaryPart") and chest.PrimaryPart.Position
-                        if not pos then
-                            for _, part in pairs(chest:GetDescendants()) do
-                                if part:IsA("BasePart") then pos = part.Position break end
-                            end
-                        end
-                        
-                        if pos then
-                            TeleportTo(pos)
-                            task.wait(0.5)
-                            local prompt = chest:FindFirstChild("ProximityPrompt", true)
-                            if prompt and prompt.Enabled then
-                                fireproximityprompt(prompt)
-                                table.insert(OpenedChests, chest)
-                            end
-                            task.wait(1)
-                        end
-                    end
-                    
-                    if #OpenedChests >= 5 then
-                        task.wait(10)
-                        OpenedChests = {}
-                    end
-                    task.wait(2)
-                end
-            end)
+            StartChestFarm()
         end
     end
 })
+
+StartChestFarm()
 
 -- Settings Tab
 local SettingsTab = Window:CreateTab("Settings", "settings")
