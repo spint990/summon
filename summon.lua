@@ -201,12 +201,12 @@ do
 end
 
 -- Auto Progress System
-local AutoProgress = false
+local AutoProgress = true
 DungeonTab:CreateSection("Auto Progress")
 DungeonTab:CreateToggle({
     Name = "Auto Next/Retry",
     Description = "Auto retry on fail, auto next stage on win",
-    CurrentValue = false,
+    CurrentValue = true,
     Flag = "AutoProgress",
     Callback = function(Value)
         AutoProgress = Value
