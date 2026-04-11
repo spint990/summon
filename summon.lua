@@ -161,3 +161,39 @@ Players.LocalPlayer.OnTeleport:Connect(function(State)
         queueteleport("loadstring(game:HttpGet('" .. ScriptURL .. "'))()")
     end
 end)
+
+-- Stage Detection System
+do
+    task.spawn(function()
+        local player = Players.LocalPlayer
+        local profile = player:WaitForChild("PlayerGui"):WaitForChild("Profile", 30)
+        if not profile then return end
+        local mapsFolder = profile:WaitForChild("Maps", 10)
+        if not mapsFolder then return end
+
+        local ok, WaveData = pcall(function()
+            return require(game.ReplicatedStorage.Systems.Waves.WaveData)
+        end)
+        if not ok or not WaveData then return end
+
+        local sorted = {}
+        for key, map in pairs(WaveData) do
+            if type(map) == "table" and map.Stages and not map.Hidden then
+                table.insert(sorted, {Key = key, Title = map.Title or key, Order = map.Order or 999, Stages = map.Stages})
+            end
+        end
+        table.sort(sorted, function(a, b) return a.Order < b.Order end)
+
+        for _, map in ipairs(sorted) do
+            for i = 1, #map.Stages do
+                local mapFolder = mapsFolder:FindFirstChild(map.Key)
+                local clears = mapFolder and mapFolder:GetAttribute(tostring(i)) or 0
+                if not clears or clears == 0 then
+                    print("Next: " .. map.Title .. " - Stage " .. i)
+                    return
+                end
+            end
+        end
+        print("All stages cleared!")
+    end)
+end
