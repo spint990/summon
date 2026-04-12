@@ -218,11 +218,6 @@ DungeonTab:CreateToggle({
     end
 })
 
-local function IsInMatch()
-    return game.ReplicatedStorage:GetAttribute("MapName") ~= nil
-        and game.ReplicatedStorage:GetAttribute("IsLobby") == false
-end
-
 task.spawn(function()
     local wavesScript = game.ReplicatedStorage:FindFirstChild("Systems") and game.ReplicatedStorage.Systems:FindFirstChild("Waves")
     if not wavesScript then return end
@@ -230,11 +225,6 @@ task.spawn(function()
     if not gameOverRemote then return end
     local readyRemote = wavesScript:FindFirstChild("Ready")
     if not readyRemote then return end
-    local challengesScript = game.ReplicatedStorage.Systems:FindFirstChild("Challenges")
-    if not challengesScript then return end
-    local startRoundRemote = challengesScript:FindFirstChild("StartRound")
-    if not startRoundRemote then return end
-
     local mapScript = game.ReplicatedStorage.Systems:FindFirstChild("Map")
     local restartRoundRemote = mapScript and mapScript:FindFirstChild("RestartRound")
 
@@ -254,22 +244,7 @@ task.spawn(function()
         task.wait(math.random(10.0, 13.0))
         if not AutoProgress then return end
 
-        if IsInMatch() then
-            print("[AutoProgress] " .. (cleared and "Next" or "Retry") .. " -> Ready")
-            readyRemote:FireServer()
-        else
-            local target = cleared and NextTarget
-            if target then
-                print("[AutoProgress] Next (StartRound) -> " .. target.Map .. " Stage " .. target.Stage)
-                startRoundRemote:FireServer(target.Map, target.Stage)
-            else
-                local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
-                local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
-                if currentMap and currentStage then
-                    print("[AutoProgress] Retry (StartRound) -> " .. currentMap .. " Stage " .. currentStage)
-                    startRoundRemote:FireServer(currentMap, currentStage)
-                end
-            end
-        end
+        print("[AutoProgress] " .. (cleared and "Next" or "Retry") .. " -> Ready")
+        readyRemote:FireServer()
     end)
 end)
