@@ -254,19 +254,21 @@ task.spawn(function()
         task.wait(math.random(10.0, 13.0))
         if not AutoProgress then return end
 
-        if cleared and NextTarget then
-            print("[AutoProgress] Next -> " .. NextTarget.Map .. " Stage " .. NextTarget.Stage)
-            startRoundRemote:FireServer(NextTarget.Map, NextTarget.Stage)
+        if IsInMatch() then
+            print("[AutoProgress] " .. (cleared and "Next" or "Retry") .. " -> Ready")
+            readyRemote:FireServer()
         else
-            local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
-            local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
-
-            if IsInMatch() and readyRemote then
-                print("[AutoProgress] Retry (Ready) -> " .. tostring(currentMap) .. " Stage " .. tostring(currentStage))
-                readyRemote:FireServer()
-            elseif currentMap and currentStage then
-                print("[AutoProgress] Retry (StartRound) -> " .. currentMap .. " Stage " .. currentStage)
-                startRoundRemote:FireServer(currentMap, currentStage)
+            local target = cleared and NextTarget
+            if target then
+                print("[AutoProgress] Next (StartRound) -> " .. target.Map .. " Stage " .. target.Stage)
+                startRoundRemote:FireServer(target.Map, target.Stage)
+            else
+                local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
+                local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
+                if currentMap and currentStage then
+                    print("[AutoProgress] Retry (StartRound) -> " .. currentMap .. " Stage " .. currentStage)
+                    startRoundRemote:FireServer(currentMap, currentStage)
+                end
             end
         end
     end)
