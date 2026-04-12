@@ -223,20 +223,10 @@ task.spawn(function()
     if not wavesScript then return end
     local gameOverRemote = wavesScript:FindFirstChild("GameOver")
     if not gameOverRemote then return end
-    local readyRemote = wavesScript:FindFirstChild("Ready")
-    if not readyRemote then return end
-    local mapScript = game.ReplicatedStorage.Systems:FindFirstChild("Map")
-    local restartRoundRemote = mapScript and mapScript:FindFirstChild("RestartRound")
-
-    if restartRoundRemote then
-        restartRoundRemote.OnClientEvent:Connect(function()
-            task.wait(math.random(2.0, 4.0))
-            if AutoProgress then
-                print("[AutoProgress] Intermission -> Ready")
-                readyRemote:FireServer()
-            end
-        end)
-    end
+    local challengesScript = game.ReplicatedStorage.Systems:FindFirstChild("Challenges")
+    if not challengesScript then return end
+    local startRoundRemote = challengesScript:FindFirstChild("StartRound")
+    if not startRoundRemote then return end
 
     gameOverRemote.OnClientEvent:Connect(function(cleared, xp, wave, totalWaves, rewards)
         if not AutoProgress then return end
@@ -244,7 +234,18 @@ task.spawn(function()
         task.wait(math.random(10.0, 13.0))
         if not AutoProgress then return end
 
-        print("[AutoProgress] " .. (cleared and "Next" or "Retry") .. " -> Ready")
-        readyRemote:FireServer()
+        local target = NextTarget
+        if not cleared or not target then
+            local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
+            local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
+            if currentMap and currentStage then
+                target = {Map = currentMap, Stage = currentStage}
+            end
+        end
+
+        if target then
+            print("[AutoProgress] -> " .. target.Map .. " Stage " .. target.Stage)
+            startRoundRemote:FireServer(target.Map, target.Stage)
+        end
     end)
 end)
