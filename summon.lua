@@ -164,6 +164,8 @@ end)
 
 -- Stage Detection System
 local WaveDataRef = nil
+local NextTarget = nil
+
 do
     task.spawn(function()
         local player = Players.LocalPlayer
@@ -191,6 +193,7 @@ do
                 local mapFolder = mapsFolder:FindFirstChild(map.Key)
                 local clears = mapFolder and mapFolder:GetAttribute(tostring(i)) or 0
                 if not clears or clears == 0 then
+                    NextTarget = {Map = map.Key, Stage = i}
                     print("Next: " .. map.Title .. " - Stage " .. i)
                     return
                 end
@@ -202,6 +205,7 @@ end
 
 -- Auto Progress System
 local AutoProgress = true
+
 DungeonTab:CreateSection("Auto Progress")
 DungeonTab:CreateToggle({
     Name = "Auto Next/Retry",
@@ -227,40 +231,21 @@ task.spawn(function()
     gameOverRemote.OnClientEvent:Connect(function(cleared, xp, wave, totalWaves, rewards)
         if not AutoProgress then return end
 
-        local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
-        local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
-        if not currentMap or not currentStage then return end
-
-        task.wait(math.random(2.0, 10.0))
-
+        task.wait(math.random(10.0, 13.0))
         if not AutoProgress then return end
 
-        local targetMap = currentMap
-        local targetStage = currentStage
-
-        if cleared then
-            local mapData = WaveDataRef and WaveDataRef[currentMap]
-            if mapData then
-                if currentStage < #mapData.Stages then
-                    targetStage = currentStage + 1
-                else
-                    local nextMap = nil
-                    for key, data in pairs(WaveDataRef) do
-                        if type(data) == "table" and data.Stages and not data.Hidden and data.Order == mapData.Order + 1 then
-                            nextMap = key
-                            break
-                        end
-                    end
-                    if nextMap then
-                        targetMap = nextMap
-                        targetStage = 1
-                    end
-                end
+        local target = NextTarget
+        if not cleared or not target then
+            local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
+            local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
+            if currentMap and currentStage then
+                target = {Map = currentMap, Stage = currentStage}
             end
         end
 
-        print("Auto: " .. (cleared and "Next" or "Retry") .. " -> " .. targetMap .. " Stage " .. targetStage)
-        Rayfield:Notify({Title = "Auto Progress", Content = (cleared and "Next" or "Retry") .. ": Stage " .. targetStage, Duration = 3})
-        startRoundRemote:FireServer(targetMap, targetStage)
+        if target then
+            print("[AutoProgress] -> " .. target.Map .. " Stage " .. target.Stage)
+            startRoundRemote:FireServer(target.Map, target.Stage)
+        end
     end)
 end)
