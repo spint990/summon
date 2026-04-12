@@ -218,6 +218,44 @@ DungeonTab:CreateToggle({
     end
 })
 
+local function FindRetryButton()
+    local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not playerGui then return nil end
+    for _, gui in pairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Enabled ~= false then
+            for _, desc in pairs(gui:GetDescendants()) do
+                if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible and desc.Active then
+                    local name = desc.Name:lower()
+                    local text = desc:IsA("TextButton") and type(desc.Text) == "string" and desc.Text:lower() or ""
+                    if name:find("retry") or name:find("ready") or text:find("retry") then
+                        return desc
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function ClickRetryButton()
+    for _ = 1, 10 do
+        local btn = FindRetryButton()
+        if btn then
+            if firesignal then
+                firesignal(btn.MouseButton1Click)
+            elseif getconnections then
+                for _, conn in pairs(getconnections(btn.MouseButton1Click)) do
+                    conn:Fire()
+                end
+            end
+            print("[AutoProgress] Retry button clicked")
+            return true
+        end
+        task.wait(1)
+    end
+    return false
+end
+
 task.spawn(function()
     local wavesScript = game.ReplicatedStorage:FindFirstChild("Systems") and game.ReplicatedStorage.Systems:FindFirstChild("Waves")
     if not wavesScript then return end
@@ -234,18 +272,19 @@ task.spawn(function()
         task.wait(math.random(10.0, 13.0))
         if not AutoProgress then return end
 
-        local target = NextTarget
-        if not cleared or not target then
-            local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
-            local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
-            if currentMap and currentStage then
-                target = {Map = currentMap, Stage = currentStage}
+        if cleared and NextTarget then
+            print("[AutoProgress] Next -> " .. NextTarget.Map .. " Stage " .. NextTarget.Stage)
+            startRoundRemote:FireServer(NextTarget.Map, NextTarget.Stage)
+        else
+            print("[AutoProgress] Searching retry button...")
+            if not ClickRetryButton() then
+                local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
+                local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
+                if currentMap and currentStage then
+                    print("[AutoProgress] Fallback -> " .. currentMap .. " Stage " .. currentStage)
+                    startRoundRemote:FireServer(currentMap, currentStage)
+                end
             end
-        end
-
-        if target then
-            print("[AutoProgress] -> " .. target.Map .. " Stage " .. target.Stage)
-            startRoundRemote:FireServer(target.Map, target.Stage)
         end
     end)
 end)
