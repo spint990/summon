@@ -139,7 +139,50 @@ Players.LocalPlayer.OnTeleport:Connect(function(State)
 end)
 
 local WaveDataRef = nil
-local NextTarget = nil
+local SortedMaps = nil
+local CurrentRunTarget = nil
+
+local function BuildSortedMaps(WaveData)
+    local sorted = {}
+    for key, map in pairs(WaveData) do
+        if type(map) == "table" and map.Stages and not map.Hidden then
+            table.insert(sorted, {Key = key, Order = map.Order or 999, StageCount = #map.Stages})
+        end
+    end
+    table.sort(sorted, function(a, b) return a.Order < b.Order end)
+    return sorted
+end
+
+local function GetNextStage(mapKey, stageNum)
+    if not SortedMaps then return nil end
+    for m, map in ipairs(SortedMaps) do
+        if map.Key == mapKey then
+            if stageNum < map.StageCount then
+                return {Map = mapKey, Stage = stageNum + 1}
+            end
+            if m < #SortedMaps then
+                local nextMap = SortedMaps[m + 1]
+                return {Map = nextMap.Key, Stage = 1}
+            end
+            return nil
+        end
+    end
+    return nil
+end
+
+local function FindFirstUnclearedStage(mapsFolder)
+    if not SortedMaps then return nil end
+    for _, map in ipairs(SortedMaps) do
+        for i = 1, map.StageCount do
+            local mapFolder = mapsFolder:FindFirstChild(map.Key)
+            local clears = mapFolder and mapFolder:GetAttribute(tostring(i)) or 0
+            if not clears or clears == 0 then
+                return {Map = map.Key, Stage = i}
+            end
+        end
+    end
+    return nil
+end
 
 task.spawn(function()
     local player = Players.LocalPlayer
@@ -153,27 +196,15 @@ task.spawn(function()
     end)
     if not ok or not WaveData then return end
     WaveDataRef = WaveData
+    SortedMaps = BuildSortedMaps(WaveData)
 
-    local sorted = {}
-    for key, map in pairs(WaveData) do
-        if type(map) == "table" and map.Stages and not map.Hidden then
-            table.insert(sorted, {Key = key, Order = map.Order or 999, Stages = map.Stages})
-        end
+    local target = FindFirstUnclearedStage(mapsFolder)
+    if target then
+        CurrentRunTarget = target
+        print("[Stage] First uncleared: " .. target.Map .. " Stage " .. target.Stage)
+    else
+        print("[Stage] All stages cleared!")
     end
-    table.sort(sorted, function(a, b) return a.Order < b.Order end)
-
-    for _, map in ipairs(sorted) do
-        for i = 1, #map.Stages do
-            local mapFolder = mapsFolder:FindFirstChild(map.Key)
-            local clears = mapFolder and mapFolder:GetAttribute(tostring(i)) or 0
-            if not clears or clears == 0 then
-                NextTarget = {Map = map.Key, Stage = i}
-                print("[Stage] Next: " .. map.Key .. " Stage " .. i)
-                return
-            end
-        end
-    end
-    print("[Stage] All stages cleared!")
 end)
 
 local AutoProgress = true
@@ -210,17 +241,24 @@ task.spawn(function()
         task.wait(math.random(8.0, 12.0))
         if not AutoProgress then return end
 
-        local target = NextTarget
-        if cleared and target then
-            print("[AutoProgress] Cleared -> " .. target.Map .. " Stage " .. target.Stage)
-            startRoundRemote:FireServer(target.Map, target.Stage)
-        else
-            local currentMap = ReplicatedStorage:GetAttribute("MapName")
-            local currentStage = ReplicatedStorage:GetAttribute("StageNumber")
-            if currentMap and currentStage then
-                print("[AutoProgress] Retry -> " .. currentMap .. " Stage " .. currentStage)
+        local currentMap = ReplicatedStorage:GetAttribute("MapName")
+        local currentStage = ReplicatedStorage:GetAttribute("StageNumber")
+        if not currentMap or not currentStage then return end
+        currentStage = tonumber(currentStage) or 1
+
+        if cleared then
+            local nextStage = GetNextStage(currentMap, currentStage)
+            if nextStage then
+                CurrentRunTarget = nextStage
+                print("[AutoProgress] Cleared -> Next: " .. nextStage.Map .. " Stage " .. nextStage.Stage)
+                startRoundRemote:FireServer(nextStage.Map, nextStage.Stage)
+            else
+                print("[AutoProgress] Cleared -> Last stage reached, retry: " .. currentMap .. " Stage " .. currentStage)
                 startRoundRemote:FireServer(currentMap, currentStage)
             end
+        else
+            print("[AutoProgress] Retry -> " .. currentMap .. " Stage " .. currentStage)
+            startRoundRemote:FireServer(currentMap, currentStage)
         end
     end)
 end)
