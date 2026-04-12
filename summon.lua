@@ -254,8 +254,6 @@ task.spawn(function()
                     if nextMap then
                         targetMap = nextMap
                         targetStage = 1
-                    else
-                        return
                     end
                 end
             end
