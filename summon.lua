@@ -1,28 +1,20 @@
--- Summon Script with Rayfield UI
--- Wait for game to load
 if not game:IsLoaded() then game.Loaded:Wait() end
 
--- Executor function fallbacks
 local queueteleport = queue_on_teleport or (syn and syn.queue_on_teleport) or (fluxus and fluxus.queue_on_teleport)
 local fireproximityprompt = fireproximityprompt
 
--- Script URL for persistence (CHANGE THIS TO YOUR GITHUB RAW URL)
 local ScriptURL = "https://raw.githubusercontent.com/spint990/summon/refs/heads/main/summon.lua"
 
--- Anti-duplicate execution check using global environment
 local ScriptId = "SummonHub_" .. tostring(game.PlaceId)
-if getgenv()[ScriptId] then
-    return -- Script already running, exit
-end
+if getgenv()[ScriptId] then return end
 getgenv()[ScriptId] = true
 
--- Persistence variables
 local TeleportCheck = false
 local KeepScript = true
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Load Rayfield UI
 local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/spint990/ParadiseEnhancer/refs/heads/main/Rayfield.lua"))()
 
 local Window = Rayfield:CreateWindow({
@@ -33,20 +25,15 @@ local Window = Rayfield:CreateWindow({
     KeySystem = false
 })
 
--- Dungeon Tab
 local DungeonTab = Window:CreateTab("Dungeon", "box")
 DungeonTab:CreateSection("Chest Auto-Farm")
 
--- Variables
 local ChestFarmToggle = true
-local OpenedChests = {}
 local FarmRunning = false
 
--- Get unopened chests
 local function GetUnopenedChests()
     local chests = {}
-    
-    for _, chest in pairs(CollectionService:GetTagged("BonusChestPart")) do
+    for _, chest in CollectionService:GetTagged("BonusChestPart") do
         if chest and chest.Parent then
             local prompt = chest:FindFirstChild("ProximityPrompt", true)
             if prompt and prompt.Enabled then
@@ -54,61 +41,56 @@ local function GetUnopenedChests()
             end
         end
     end
-    
-    for _, obj in pairs(workspace:GetChildren()) do
-        if obj.Name:lower():find("chest") then
-            local prompt = obj:FindFirstChild("ProximityPrompt", true)
-            if prompt and prompt.Enabled then
-                table.insert(chests, obj)
-            end
-        end
-    end
-    
     return chests
 end
 
--- Teleport function
+local function GetChestPosition(chest)
+    if chest:IsA("BasePart") then return chest.Position end
+    if chest.PrimaryPart then return chest.PrimaryPart.Position end
+    for _, part in chest:GetDescendants() do
+        if part:IsA("BasePart") then return part.Position end
+    end
+    return nil
+end
+
 local function TeleportTo(position)
-    local hrp = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local char = Players.LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if hrp then
         hrp.CFrame = CFrame.new(position + Vector3.new(0, 3, 0))
     end
 end
 
--- Auto Farm Loop
+local function OpenChest(chest)
+    local prompt = chest:FindFirstChild("ProximityPrompt", true)
+    if not prompt or not prompt.Enabled then return false end
+    local pos = GetChestPosition(chest)
+    if not pos then return false end
+    TeleportTo(pos)
+    task.wait(0.3)
+    prompt = chest:FindFirstChild("ProximityPrompt", true)
+    if prompt and prompt.Enabled then
+        fireproximityprompt(prompt)
+        return true
+    end
+    return false
+end
+
 local function StartChestFarm()
     if FarmRunning then return end
-    task.wait(15)
     FarmRunning = true
-    OpenedChests = {}
     task.spawn(function()
         while ChestFarmToggle do
             local chests = GetUnopenedChests()
-            for _, chest in ipairs(chests) do
-                if not ChestFarmToggle then break end
-                
-                local pos = chest:IsA("BasePart") and chest.Position or chest:FindFirstChild("PrimaryPart") and chest.PrimaryPart.Position
-                if not pos then
-                    for _, part in pairs(chest:GetDescendants()) do
-                        if part:IsA("BasePart") then pos = part.Position break end
-                    end
-                end
-                
-                if pos then
-                    TeleportTo(pos)
-                    task.wait(0.5)
-                    local prompt = chest:FindFirstChild("ProximityPrompt", true)
-                    if prompt and prompt.Enabled then
-                        fireproximityprompt(prompt)
-                        table.insert(OpenedChests, chest)
-                    end
-task.wait(15)
-                end
+            if #chests == 0 then
+                task.wait(3)
+                continue
             end
-            
-            if #OpenedChests >= 5 then
-                task.wait(10)
-                OpenedChests = {}
+            for _, chest in chests do
+                if not ChestFarmToggle then break end
+                if OpenChest(chest) then
+                    task.wait(math.random(8.0, 15.0))
+                end
             end
             task.wait(2)
         end
@@ -116,7 +98,6 @@ task.wait(15)
     end)
 end
 
--- Auto Farm Toggle
 DungeonTab:CreateToggle({
     Name = "Auto Farm Chests",
     Description = "Teleports to and opens all chests",
@@ -124,15 +105,12 @@ DungeonTab:CreateToggle({
     Flag = "AutoFarmChests",
     Callback = function(Value)
         ChestFarmToggle = Value
-        if Value then
-            StartChestFarm()
-        end
+        if Value then StartChestFarm() end
     end
 })
 
 StartChestFarm()
 
--- Settings Tab
 local SettingsTab = Window:CreateTab("Settings", "settings")
 SettingsTab:CreateSection("Persistence")
 
@@ -147,14 +125,12 @@ SettingsTab:CreateToggle({
     end
 })
 
--- Notify on load
 Rayfield:Notify({
     Title = "Summon Hub",
     Content = queueteleport and "Loaded! Persistence enabled." or "Loaded! Persistence NOT supported.",
     Duration = 3
 })
 
--- Persistence System
 Players.LocalPlayer.OnTeleport:Connect(function(State)
     if KeepScript and not TeleportCheck and queueteleport then
         TeleportCheck = true
@@ -162,48 +138,44 @@ Players.LocalPlayer.OnTeleport:Connect(function(State)
     end
 end)
 
--- Stage Detection System
 local WaveDataRef = nil
 local NextTarget = nil
 
-do
-    task.spawn(function()
-        local player = Players.LocalPlayer
-        local profile = player:WaitForChild("PlayerGui"):WaitForChild("Profile", 30)
-        if not profile then return end
-        local mapsFolder = profile:WaitForChild("Maps", 10)
-        if not mapsFolder then return end
+task.spawn(function()
+    local player = Players.LocalPlayer
+    local profile = player:WaitForChild("PlayerGui"):WaitForChild("Profile", 30)
+    if not profile then return end
+    local mapsFolder = profile:WaitForChild("Maps", 10)
+    if not mapsFolder then return end
 
-        local ok, WaveData = pcall(function()
-            return require(game.ReplicatedStorage.Systems.Waves.WaveData)
-        end)
-        if not ok or not WaveData then return end
-        WaveDataRef = WaveData
-
-        local sorted = {}
-        for key, map in pairs(WaveData) do
-            if type(map) == "table" and map.Stages and not map.Hidden then
-                table.insert(sorted, {Key = key, Title = map.Title or key, Order = map.Order or 999, Stages = map.Stages})
-            end
-        end
-        table.sort(sorted, function(a, b) return a.Order < b.Order end)
-
-        for _, map in ipairs(sorted) do
-            for i = 1, #map.Stages do
-                local mapFolder = mapsFolder:FindFirstChild(map.Key)
-                local clears = mapFolder and mapFolder:GetAttribute(tostring(i)) or 0
-                if not clears or clears == 0 then
-                    NextTarget = {Map = map.Key, Stage = i}
-                    print("Next: " .. map.Title .. " - Stage " .. i)
-                    return
-                end
-            end
-        end
-        print("All stages cleared!")
+    local ok, WaveData = pcall(function()
+        return require(ReplicatedStorage.Systems.Waves.WaveData)
     end)
-end
+    if not ok or not WaveData then return end
+    WaveDataRef = WaveData
 
--- Auto Progress System
+    local sorted = {}
+    for key, map in pairs(WaveData) do
+        if type(map) == "table" and map.Stages and not map.Hidden then
+            table.insert(sorted, {Key = key, Order = map.Order or 999, Stages = map.Stages})
+        end
+    end
+    table.sort(sorted, function(a, b) return a.Order < b.Order end)
+
+    for _, map in ipairs(sorted) do
+        for i = 1, #map.Stages do
+            local mapFolder = mapsFolder:FindFirstChild(map.Key)
+            local clears = mapFolder and mapFolder:GetAttribute(tostring(i)) or 0
+            if not clears or clears == 0 then
+                NextTarget = {Map = map.Key, Stage = i}
+                print("[Stage] Next: " .. map.Key .. " Stage " .. i)
+                return
+            end
+        end
+    end
+    print("[Stage] All stages cleared!")
+end)
+
 local AutoProgress = true
 
 DungeonTab:CreateSection("Auto Progress")
@@ -219,33 +191,36 @@ DungeonTab:CreateToggle({
 })
 
 task.spawn(function()
-    local wavesScript = game.ReplicatedStorage:FindFirstChild("Systems") and game.ReplicatedStorage.Systems:FindFirstChild("Waves")
-    if not wavesScript then return end
-    local gameOverRemote = wavesScript:FindFirstChild("GameOver")
+    local systemsFolder = ReplicatedStorage:WaitForChild("Systems", 10)
+    if not systemsFolder then return end
+
+    local wavesFolder = systemsFolder:WaitForChild("Waves", 5)
+    if not wavesFolder then return end
+    local gameOverRemote = wavesFolder:WaitForChild("GameOver", 5)
     if not gameOverRemote then return end
-    local challengesScript = game.ReplicatedStorage.Systems:FindFirstChild("Challenges")
+
+    local challengesScript = systemsFolder:WaitForChild("Challenges", 5)
     if not challengesScript then return end
-    local startRoundRemote = challengesScript:FindFirstChild("StartRound")
+    local startRoundRemote = challengesScript:WaitForChild("StartRound", 5)
     if not startRoundRemote then return end
 
     gameOverRemote.OnClientEvent:Connect(function(cleared, xp, wave, totalWaves, rewards)
         if not AutoProgress then return end
 
-        task.wait(math.random(10.0, 13.0))
+        task.wait(math.random(8.0, 12.0))
         if not AutoProgress then return end
 
         local target = NextTarget
-        if not cleared or not target then
-            local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
-            local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
-            if currentMap and currentStage then
-                target = {Map = currentMap, Stage = currentStage}
-            end
-        end
-
-        if target then
-            print("[AutoProgress] -> " .. target.Map .. " Stage " .. target.Stage)
+        if cleared and target then
+            print("[AutoProgress] Cleared -> " .. target.Map .. " Stage " .. target.Stage)
             startRoundRemote:FireServer(target.Map, target.Stage)
+        else
+            local currentMap = ReplicatedStorage:GetAttribute("MapName")
+            local currentStage = ReplicatedStorage:GetAttribute("StageNumber")
+            if currentMap and currentStage then
+                print("[AutoProgress] Retry -> " .. currentMap .. " Stage " .. currentStage)
+                startRoundRemote:FireServer(currentMap, currentStage)
+            end
         end
     end)
 end)
