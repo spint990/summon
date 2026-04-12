@@ -218,42 +218,9 @@ DungeonTab:CreateToggle({
     end
 })
 
-local function FindRetryButton()
-    local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    if not playerGui then return nil end
-    for _, gui in pairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Enabled ~= false then
-            for _, desc in pairs(gui:GetDescendants()) do
-                if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible and desc.Active then
-                    local name = desc.Name:lower()
-                    local text = desc:IsA("TextButton") and type(desc.Text) == "string" and desc.Text:lower() or ""
-                    if name:find("retry") or name:find("ready") or text:find("retry") then
-                        return desc
-                    end
-                end
-            end
-        end
-    end
-    return nil
-end
-
-local function ClickRetryButton()
-    for _ = 1, 10 do
-        local btn = FindRetryButton()
-        if btn then
-            if firesignal then
-                firesignal(btn.MouseButton1Click)
-            elseif getconnections then
-                for _, conn in pairs(getconnections(btn.MouseButton1Click)) do
-                    conn:Fire()
-                end
-            end
-            print("[AutoProgress] Retry button clicked")
-            return true
-        end
-        task.wait(1)
-    end
-    return false
+local function IsInMatch()
+    return game.ReplicatedStorage:GetAttribute("MapName") ~= nil
+        and game.ReplicatedStorage:GetAttribute("IsLobby") == false
 end
 
 task.spawn(function()
@@ -261,10 +228,25 @@ task.spawn(function()
     if not wavesScript then return end
     local gameOverRemote = wavesScript:FindFirstChild("GameOver")
     if not gameOverRemote then return end
+    local readyRemote = wavesScript:FindFirstChild("Ready")
+    if not readyRemote then return end
     local challengesScript = game.ReplicatedStorage.Systems:FindFirstChild("Challenges")
     if not challengesScript then return end
     local startRoundRemote = challengesScript:FindFirstChild("StartRound")
     if not startRoundRemote then return end
+
+    local mapScript = game.ReplicatedStorage.Systems:FindFirstChild("Map")
+    local restartRoundRemote = mapScript and mapScript:FindFirstChild("RestartRound")
+
+    if restartRoundRemote then
+        restartRoundRemote.OnClientEvent:Connect(function()
+            task.wait(math.random(2.0, 4.0))
+            if AutoProgress then
+                print("[AutoProgress] Intermission -> Ready")
+                readyRemote:FireServer()
+            end
+        end)
+    end
 
     gameOverRemote.OnClientEvent:Connect(function(cleared, xp, wave, totalWaves, rewards)
         if not AutoProgress then return end
@@ -276,14 +258,15 @@ task.spawn(function()
             print("[AutoProgress] Next -> " .. NextTarget.Map .. " Stage " .. NextTarget.Stage)
             startRoundRemote:FireServer(NextTarget.Map, NextTarget.Stage)
         else
-            print("[AutoProgress] Searching retry button...")
-            if not ClickRetryButton() then
-                local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
-                local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
-                if currentMap and currentStage then
-                    print("[AutoProgress] Fallback -> " .. currentMap .. " Stage " .. currentStage)
-                    startRoundRemote:FireServer(currentMap, currentStage)
-                end
+            local currentMap = game.ReplicatedStorage:GetAttribute("MapName")
+            local currentStage = game.ReplicatedStorage:GetAttribute("StageNumber")
+
+            if IsInMatch() and readyRemote then
+                print("[AutoProgress] Retry (Ready) -> " .. tostring(currentMap) .. " Stage " .. tostring(currentStage))
+                readyRemote:FireServer()
+            elseif currentMap and currentStage then
+                print("[AutoProgress] Retry (StartRound) -> " .. currentMap .. " Stage " .. currentStage)
+                startRoundRemote:FireServer(currentMap, currentStage)
             end
         end
     end)
